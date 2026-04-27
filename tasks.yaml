@@ -1,0 +1,57 @@
+analyze_emotion:
+  description: >
+    Analyze the following user input and detect emotional state:
+
+    {user_input}
+
+  expected_output: >
+    A clear summary of detected emotions.
+
+  agent: emotion_analyzer
+
+find_cause:
+  description: >
+    Based on the emotional analysis of this input:
+
+    {user_input}
+
+    Identify possible root causes.
+
+  expected_output: >
+    A list of causes.
+
+  agent: cause_analyzer
+
+create_plan:
+  description: >
+    Based on the following user input:
+
+    {user_input}
+
+    Generate a structured mental health support response.
+
+    IMPORTANT INSTRUCTIONS:
+    - Use calm, neutral, and constructive language
+    - It is okay to say "You are experiencing..." but avoid obvious or repetitive emotional statements
+    - Avoid heavy or overly negative wording (e.g., "overwhelmed", "trapped")
+    - Focus more on solutions than explanation
+    - Keep tone clear, confident, and supportive (like a mentor)
+
+    Format:
+
+    Section 1: Situation Summary
+    - Briefly acknowledge the situation in 1–2 lines
+
+    Section 2: What Might Be Contributing
+    - List possible reasons (short, not too deep)
+
+    Section 3: What You Can Do Next
+    - Clear, actionable steps (bullet points)
+
+    Section 4: Support Message
+    - Calm, reassuring, motivating (1–2 lines max)
+
+  expected_output: >
+    A structured, practical, supportive response focused on solutions.
+
+  agent: action_planner
