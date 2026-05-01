@@ -5,6 +5,9 @@ from crew import MentalHealthApp
 from dotenv import load_dotenv
 from gtts import gTTS
 import re
+import json
+import urllib.request
+import urllib.error
 
 # --- Audio recorder for speech input (no ffmpeg dependency) ---
 from audio_recorder_streamlit import audio_recorder
@@ -262,6 +265,83 @@ st.markdown("""
             from, to { border-color: transparent }
             50% { border-color: #7694eb; }
         }
+
+        /* Auto dark mode support */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background:
+                    radial-gradient(ellipse at 60% 18%, #1a2242 0%, #101727 75%, transparent 100%),
+                    radial-gradient(ellipse at 12% 92%, #1e2f3d 0%, #0f1523 90%, transparent 100%),
+                    linear-gradient(130deg, #0b1220 50%, #101629 100%);
+            }
+            .main > div {
+                background: rgba(18, 24, 41, 0.82);
+                border: 1px solid rgba(120, 145, 184, 0.25);
+                box-shadow: 0 10px 38px rgba(0, 0, 0, 0.35);
+            }
+            html, body, [class*="css"] {
+                color: #dbe6ff;
+            }
+            .hero-badge {
+                background: linear-gradient(95deg, #31446c 10%, #4b3f7c 90%);
+                color: #d9e5ff;
+                border-color: rgba(178, 190, 224, 0.35);
+            }
+            .hero-sub {
+                color: #aebde3;
+            }
+            .hero-divider {
+                background: linear-gradient(90deg, #4f7fb3 0%, #7b66bc 80%, #5f90c8 100%);
+                opacity: 0.75;
+            }
+            .hero-icon {
+                opacity: 0.56;
+                filter: drop-shadow(0 1px 3px rgba(87, 145, 209, 0.4));
+            }
+            .stTextArea > label {
+                color: #bbc9ef;
+            }
+            .stTextArea textarea {
+                background: rgba(20, 29, 47, 0.85);
+                border: 1.5px solid rgba(122, 145, 188, 0.45);
+                color: #e5ecff;
+                box-shadow: 0 2px 14px rgba(0, 0, 0, 0.2);
+            }
+            .stTextArea textarea::placeholder {
+                color: #95a6cf;
+            }
+            .stTextArea textarea:focus {
+                border: 1.7px solid #8f9df5;
+                box-shadow: 0 0 0 2px rgba(120, 151, 233, 0.2), 0 4px 18px rgba(45, 77, 148, 0.26);
+            }
+            .stButton > button {
+                background: linear-gradient(90deg, #344f73 0%, #534985 100%);
+                color: #edf2ff;
+                box-shadow: 0 2px 14px rgba(0, 0, 0, 0.28);
+            }
+            .stButton > button:hover {
+                background: linear-gradient(90deg, #456a8f 0%, #6b5ea7 100%);
+                color: #ffffff;
+            }
+            .support-card {
+                background: rgba(20, 29, 47, 0.85);
+                border: 1.2px solid rgba(120, 144, 184, 0.36);
+                box-shadow: 0 4px 18px rgba(0, 0, 0, 0.22);
+                color: #e7efff;
+            }
+            .stAudio {
+                background: rgba(20, 29, 47, 0.72);
+                border: 1.2px solid rgba(121, 145, 189, 0.32);
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            }
+            .typewriter-text {
+                color: #b7c4e9;
+                border-right-color: #9ab2f0;
+            }
+            .corner-art-abstract {
+                opacity: 0.22;
+            }
+        }
     </style>
     <!-- Plus Jakarta Sans & Inter Fonts For Calm/Elegant UI -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
@@ -485,11 +565,54 @@ def build_voice_script(result_text: str):
     voice_script = ensure_min_words(voice_script, min_words=85)
     return voice_script
 
+
+def translate_to_bengali(text: str) -> str:
+    """Translate narration text to Bengali using OpenRouter."""
+    api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    base_url = os.getenv("OPENAI_API_BASE", "https://openrouter.ai/api/v1").rstrip("/")
+    if not api_key or not text.strip():
+        return text
+
+    payload = {
+        "model": "openai/gpt-4o-mini",
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "Translate the user's text into natural, conversational Bengali (Bangla). "
+                    "Keep meaning, tone, and structure. Output only Bengali text."
+                ),
+            },
+            {"role": "user", "content": text},
+        ],
+        "temperature": 0.2,
+    }
+
+    req = urllib.request.Request(
+        f"{base_url}/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            translated = data["choices"][0]["message"]["content"].strip()
+            return translated if translated else text
+    except Exception:
+        # Fallback to original text if translation fails.
+        return text
+
 # Text to audio (using ElevenLabs free voice, fallback to gTTS if fails)
 def text_to_audio(text):
     # Use the ElevenLabs "Rachel" free default model voice
     rachel_voice_id = "EXAVITQu4vr4xnSDxMaL"  # Rachel's ID (free)
     text = remove_asterisks(text)
+    text = translate_to_bengali(text)
     # Use up to 1200 chars (should be plenty for ~30sec audio, adjust if limit is lower at provider)
     max_chars = 1200
     text = text[:max_chars]
@@ -497,7 +620,7 @@ def text_to_audio(text):
         audio = client.text_to_speech.convert(
             text=text,
             voice_id=rachel_voice_id,
-            model_id="eleven_turbo_v2"
+            model_id="eleven_multilingual_v2"
         )
         with open("output.mp3", "wb") as f:
             for chunk in audio:
@@ -505,7 +628,7 @@ def text_to_audio(text):
     except Exception as e:
         # Fallback: Use gTTS if ElevenLabs free fails, or notify user
         try:
-            tts = gTTS(text, lang='en')
+            tts = gTTS(text, lang='bn')
             tts.save("output.mp3")
             st.info("Used fallback (gTTS) for audio due to ElevenLabs error.")
         except Exception as inner_e:
